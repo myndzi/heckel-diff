@@ -1,6 +1,6 @@
 {
   "name": "heckel-diff",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Tweaked implementation of Paul Heckel's diff algorithm",
   "main": "index.js",
   "scripts": {
