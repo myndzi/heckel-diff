@@ -10,33 +10,66 @@ var expect = require('expect.js');
 
 describe('diff', function () {
   it('should return no change', function () {
+    var shortcut = null;
     expect(diff(
       ['a', 'b', 'c'],
-      ['a', 'b', 'c']
+      ['a', 'b', 'c'],
+      function (type) { shortcut = type; }
     )).to.eql([
       { type: 'same', value: 'a' },
       { type: 'same', value: 'b' },
       { type: 'same', value: 'c' }
     ]);
+    expect(shortcut).to.eql('all same');
   });
 
   it('should return all insertions', function () {
+    var shortcut = null;
     expect(diff(
       [ ],
-      ['a', 'b', 'c']
+      ['a', 'b', 'c'],
+      function (type) { shortcut = type; }
     )).to.eql([
       { type: 'ins', value: 'a' },
+      { type: 'ins', value: 'b' },
+      { type: 'ins', value: 'c' }
+    ]);
+    expect(shortcut).to.eql('all right');
+  });
+
+  it('should return all insertions, including repeats', function () {
+    expect(diff(
+      [ ],
+      ['a', 'b', 'b', 'c']
+    )).to.eql([
+      { type: 'ins', value: 'a' },
+      { type: 'ins', value: 'b' },
       { type: 'ins', value: 'b' },
       { type: 'ins', value: 'c' }
     ]);
   });
 
   it('should return all deletions', function () {
+    var shortcut = null;
     expect(diff(
       ['a', 'b', 'c'],
+      [ ],
+      function (type) { shortcut = type; }
+    )).to.eql([
+      { type: 'del', value: 'a' },
+      { type: 'del', value: 'b' },
+      { type: 'del', value: 'c' }
+    ]);
+    expect(shortcut).to.eql('all left');
+  });
+
+  it('should return all deletions, including repeats', function () {
+    expect(diff(
+      ['a', 'b', 'b', 'c'],
       [ ]
     )).to.eql([
       { type: 'del', value: 'a' },
+      { type: 'del', value: 'b' },
       { type: 'del', value: 'b' },
       { type: 'del', value: 'c' }
     ]);
@@ -100,6 +133,57 @@ describe('diff', function () {
       { type: 'same', value: 'b' },
       { type: 'del', value: 'a' },
       { type: 'ins', value: 'c' }
+    ]);
+  });
+
+  it('should treat repeat tokens as different in passes 4-5 (expansion)', function () {
+    expect(diff(
+      ['f', 'f', 'c'],
+      ['f', 'c']
+    )).to.eql([
+      { type: 'same', value: 'f' },
+      { type: 'del', value: 'f' },
+      { type: 'same', value: 'c' }
+    ]);
+  });
+
+  it('should reduce equivalent del/ins sequences', function () {
+    expect(diff(
+      ['f', 'f', 'f', 'c'],
+      ['f', 'f', 'c']
+    )).to.eql([
+      { type: 'same', value: 'f' },
+      { type: 'same', value: 'f' },
+      { type: 'del', value: 'f' },
+      { type: 'same', value: 'c' }
+    ]);
+
+    expect(diff(
+      ['g', 'h', 'f', 'f', 'f', 'c'],
+      ['g', 'g', 'g', 'h', 'f', 'f', 'c']
+    )).to.eql([
+      { type: 'same', value: 'g' },
+      { type: 'ins', value: 'g' },
+      { type: 'ins', value: 'g' },
+      { type: 'same', value: 'h' },
+      { type: 'same', value: 'f' },
+      { type: 'same', value: 'f' },
+      { type: 'del', value: 'f' },
+      { type: 'same', value: 'c' }
+    ]);
+
+    expect(diff(
+      ['h', 'g', 'f', 'f', 'f', 'c'],
+      ['h', 'g', 'g', 'g', 'f', 'f', 'c']
+    )).to.eql([
+      { type: 'same', value: 'h' },
+      { type: 'same', value: 'g' },
+      { type: 'ins', value: 'g' },
+      { type: 'ins', value: 'g' },
+      { type: 'same', value: 'f' },
+      { type: 'same', value: 'f' },
+      { type: 'del', value: 'f' },
+      { type: 'same', value: 'c' }
     ]);
   });
 

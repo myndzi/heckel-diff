@@ -14,14 +14,6 @@ function flattenRepeats(acc, cur) {
   });
 }
 
-function convertTokens(arg) {
-  if (!arg || !Array.isArray(arg)) {
-    return [ ];
-  }
-
-  return arg.reduce(flattenRepeats, [ ]);
-}
-
 function addToTable(table, arr, type) {
   arr.forEach(function (token, idx) {
     var ref = table;
@@ -62,6 +54,13 @@ function expandUnique(table, left, right, dir) {
         lx = left.length, rx = right.length;
 
     while (i >= 0 && j >= 0 && i < lx && j < rx) {
+      // not checking counts here has a few subtle effects
+      // this means that lines "next to" not-quite-exact (but repeated) lines
+      // will be taken to be part of the span:
+      // in [a f f c a, a f c a], the first 'a' will be marked as a pair
+      // with the second one, because the 'f f' will be marked as a pair with 'f'
+      // this is cleaned up when outputting the diff data: ['f f', 'f']
+      // will become 'f -f' on output
       if (left[i].value !== right[j].value) {
         break;
       }
@@ -89,6 +88,8 @@ function processDiff(left, right) {
       lx = left.length, rx = right.length,
       lToken, rToken, lTarget, rTarget,
       rSeek, dist1, dist2;
+
+  var countDiff;
 
   while (lPos < lx) {
     lTarget = lPos;
@@ -143,8 +144,38 @@ function processDiff(left, right) {
       push(acc, right[rPos++], 'ins');
     }
 
+    // we're done when we hit the pseudo-token on the left
+    if ('eof' in left[lPos]) { break; }
+
     // emit synced pair
-    push(acc, left[lPos], 'same');
+    // since we allow repeats of different lengths to be matched
+    // via the pass 4 & 5 expansion, we need to ensure we emit
+    // the correct sequence when the counts don't align
+    countDiff = left[lPos].count - right[rPos].count;
+    if (countDiff === 0) {
+      push(acc, left[lPos], 'same');
+    } else if (countDiff < 0) {
+      // more on the right than the left: some same, some insertion
+      push(acc, {
+        count: right[rPos].count + countDiff,
+        value: right[rPos].value
+      }, 'same');
+      push(acc, {
+        count: -countDiff,
+        value: right[rPos].value
+      }, 'ins');
+    } else if (countDiff > 0) {
+      // more on the left than the right: some same, some deletion
+      push(acc, {
+        count: left[lPos].count - countDiff,
+        value: left[lPos].value
+      }, 'same');
+      push(acc, {
+        count: countDiff,
+        value: left[lPos].value
+      }, 'del');
+    }
+
     lPos++;
     rPos++;
   }
@@ -155,7 +186,7 @@ function processDiff(left, right) {
 function same(left, right) {
   if (left.length !== right.length) { return false; }
   return left.reduce(function (acc, cur, idx) {
-    return acc && cur.value === right[idx].value;
+    return acc && cur === right[idx];
   }, true);
 };
 
@@ -163,27 +194,33 @@ function all(type) {
   return function (val) {
     return {
       type: type,
-      value: val.value
+      value: val
     };
   };
 }
 
-function diff(_left, _right) {
-  var left = convertTokens(_left),
-      right = convertTokens(_right);
+function diff(_left, _right, __testcb) {
+  var left = (_left && Array.isArray(_left) ? _left : [ ]),
+      right = (_right && Array.isArray(_right) ? _right : [ ]);
 
   // if they're the same, no need to do all that work...
-  if (same(left, right)) {
+  if (same(_left, _right)) {
+    if (typeof __testcb === 'function') { __testcb('all same'); }
     return left.map(all('same'));
   }
 
   if (left.length === 0) {
+    if (typeof __testcb === 'function') { __testcb('all right'); }
     return right.map(all('ins'));
   }
 
   if (right.length === 0) {
+    if (typeof __testcb === 'function') { __testcb('all left'); }
     return left.map(all('del'));
   }
+
+  left = left.reduce(flattenRepeats, [ ]);
+  right = right.reduce(flattenRepeats, [ ]);
 
   var table = { };
 
@@ -195,7 +232,7 @@ function diff(_left, _right) {
   expandUnique(table, left, right, 1);
   expandUnique(table, left, right, -1);
 
-  left.push({ ref: right.length }); // include trailing deletions
+  left.push({ ref: right.length, eof: true }); // include trailing deletions
 
   table = null;
 
