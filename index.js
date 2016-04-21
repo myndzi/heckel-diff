@@ -288,6 +288,8 @@ function refineChanged(changes, fn) {
 }
 
 function splitInclusive(str, sep, trim) {
+  if (!str.length) { return [ ]; }
+
   var split = str.split(sep);
   if (trim) {
     split = split.filter(function (v) {
