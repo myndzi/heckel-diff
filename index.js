@@ -1,57 +1,55 @@
 'use strict';
 
-var util = require('util');
+var util = require('util'),
+    SuffixTree = require('./suffixtree');
 
-function flattenRepeats(acc, cur) {
-  if (acc.length && acc[acc.length-1].value === cur) {
-    acc[acc.length-1].count++;
-    return acc;
+// pass one -- find truly unique sequences
+function findUnique(st, left, right) {
+  var walker = st.createWalker();
+
+  var i = 0, x = right.length;
+
+  while (i < x) {
+    // if no match, reset search to root
+    if (!walker.advance(right[i].value)) {
+      // if walker.pos is at 0, this was the first token of the search
+      // if it's greater, we don't increment the counter because we want to
+      // try the search again at the root with the same token
+      if (walker.pos === 0) { i++; }
+      walker.reset();
+      continue;
+    }
+
+    // if we have a match, record pairs when we're on a leaf
+    var leftIdx = walker.pos, rightIdx = i;
+    if (walker.isLeaf()) {
+      //console.log(left[leftIdx], walker);
+      left[leftIdx].ref = rightIdx;
+      right[rightIdx].ref = leftIdx;
+    }
+
+    i++;
   }
-  return acc.concat({
-    value: cur,
-    ref: -1,
-    count: 1
-  });
 }
 
-function addToTable(table, arr, type) {
-  arr.forEach(function (token, idx) {
-    var ref = table;
+function expandUnique(left, right, dir) {
+  var lx = left.length, rx = right.length;
 
-    ref = ref[token.value] || (
-      ref[token.value] = { }
-    );
-
-    ref = ref[token.count] || (
-      ref[token.count] = {
-        left: -1,
-        right: -1
-      }
-    );
-
-    if (ref[type] === -1) {
-      ref[type] = idx;
-    } else if (ref[type] >= 0) {
-      ref[type] = -2;
-    }
-  });
-}
-
-function findUnique(table, left, right) {
-  left.forEach(function (token) {
-    var ref = table[token.value][token.count];
-    if (ref.left >= 0 && ref.right >= 0) {
-      left[ref.left].ref = ref.right;
-      right[ref.right].ref = ref.left;
-    }
-  });
-}
-
-function expandUnique(table, left, right, dir) {
+  //console.log('expanding in direction', dir);
   left.forEach(function (token, idx) {
-    if (token.ref === -1) { return; }
-    var i = idx + dir, j = token.ref + dir,
-        lx = left.length, rx = right.length;
+    var i, j, lx = left.length, rx = right.length;
+
+    // the start and end of a sequence can be considered unique
+    // so we can expand from there
+    if (dir === 1 && idx === 0) {
+      i = 0;
+      j = 0;
+    } else if (dir === -1 && idx === lx - 1) {
+      i = lx - 1;
+      j = rx - 1;
+    } else if (token.ref === -1) {
+      return;
+    }
 
     while (i >= 0 && j >= 0 && i < lx && j < rx) {
       // not checking counts here has a few subtle effects
@@ -64,20 +62,28 @@ function expandUnique(table, left, right, dir) {
       if (left[i].value !== right[j].value) {
         break;
       }
+      //console.log("expanding pairs: %s<->%s", i, j);
       left[i].ref = j;
       right[j].ref = i;
 
       i += dir;
       j += dir;
+
+      // we may be overwriting previous stuff we don't need to overwrite here
+      // it seems though that .ref is getting set possibly incorrectly earlier
+      // so this doesn't currently work
+      /*
+      if (left[i].ref || right[j].ref) {
+        console.log(i, left[i], j, right[j]);
+        break;
+      }
+      */
     }
   });
 }
 
 function push(acc, token, type) {
-  var n = token.count;
-  while (n--) {
-    acc.push({ type: type, value: token.value });
-  }
+  acc.push({ type: type, value: token.value });
 }
 
 function calcDist(lTarget, lPos, rTarget, rPos) {
@@ -148,33 +154,7 @@ function processDiff(left, right) {
     if ('eof' in left[lPos]) { break; }
 
     // emit synced pair
-    // since we allow repeats of different lengths to be matched
-    // via the pass 4 & 5 expansion, we need to ensure we emit
-    // the correct sequence when the counts don't align
-    countDiff = left[lPos].count - right[rPos].count;
-    if (countDiff === 0) {
-      push(acc, left[lPos], 'same');
-    } else if (countDiff < 0) {
-      // more on the right than the left: some same, some insertion
-      push(acc, {
-        count: right[rPos].count + countDiff,
-        value: right[rPos].value
-      }, 'same');
-      push(acc, {
-        count: -countDiff,
-        value: right[rPos].value
-      }, 'ins');
-    } else if (countDiff > 0) {
-      // more on the left than the right: some same, some deletion
-      push(acc, {
-        count: left[lPos].count - countDiff,
-        value: left[lPos].value
-      }, 'same');
-      push(acc, {
-        count: countDiff,
-        value: left[lPos].value
-      }, 'del');
-    }
+    push(acc, left[lPos], 'same');
 
     lPos++;
     rPos++;
@@ -199,6 +179,13 @@ function all(type) {
   };
 }
 
+function wrap(v) {
+  return {
+    value: v,
+    ref: -1
+  };
+}
+
 function diff(_left, _right, __testcb) {
   var left = (_left && Array.isArray(_left) ? _left : [ ]),
       right = (_right && Array.isArray(_right) ? _right : [ ]);
@@ -219,22 +206,18 @@ function diff(_left, _right, __testcb) {
     return left.map(all('del'));
   }
 
-  left = left.reduce(flattenRepeats, [ ]);
-  right = right.reduce(flattenRepeats, [ ]);
+  var st = new SuffixTree();
+  st.add(left);
 
-  var table = { };
+  left = left.map(wrap);
+  right = right.map(wrap);
 
-  addToTable(table, left, 'left');
-  addToTable(table, right, 'right');
+  findUnique(st, left, right);
 
-  findUnique(table, left, right);
-
-  expandUnique(table, left, right, 1);
-  expandUnique(table, left, right, -1);
+  expandUnique(left, right, 1);
+  expandUnique(left, right, -1);
 
   left.push({ ref: right.length, eof: true }); // include trailing deletions
-
-  table = null;
 
   var res = processDiff(left, right);
 
