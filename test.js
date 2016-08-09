@@ -375,6 +375,109 @@ describe('diffHybrid', function () {
       { type: 'same', value: 'g h' }
     ]);
   });
+
+  it('should support only deletions', function () {
+    expect(diffHybrid(
+      'a b\nc d\nz z\ne f\ng h',
+      'a b\ni j\nz z\ng h'
+    )).to.eql([
+      { type: 'same', value: 'a b\n' },
+      { type: 'del', value: 'c ' },
+      { type: 'del', value: 'd\n' },
+      { type: 'ins', value: 'i ' },
+      { type: 'ins', value: 'j\n' },
+      { type: 'same', value: 'z z\n' },
+      { type: 'del', value: 'e f\n' },
+      { type: 'same', value: 'g h' }
+    ]);
+  });
+
+  it('should support deletions at the beginning', function () {
+    expect(diffHybrid(
+      'a b\nc d\nz z\ne f\ng h',
+      'z z\nk f\ng h'
+    )).to.eql([
+      { type: 'del', value: 'a b\n' },
+      { type: 'del', value: 'c d\n' },
+      { type: 'same', value: 'z z\n' },
+      { type: 'del', value: 'e ' },
+      { type: 'ins', value: 'k ' },
+      { type: 'same', value: 'f\n' },
+      { type: 'same', value: 'g h' }
+    ]);
+  });
+
+  it('should support deletions at the end', function () {
+    expect(diffHybrid(
+      'a b\nc d\nz z\ne f\ng h',
+      'a b\ni j\nz z\n'
+    )).to.eql([
+      { type: 'same', value: 'a b\n' },
+      { type: 'del', value: 'c ' },
+      { type: 'del', value: 'd\n' },
+      { type: 'ins', value: 'i ' },
+      { type: 'ins', value: 'j\n' },
+      { type: 'same', value: 'z z\n' },
+      { type: 'del', value: 'e ' },
+      { type: 'del', value: 'f\ng ' },
+      { type: 'del', value: 'h' }
+    ]);
+  });
+
+  it('should support only insertions', function () {
+    expect(diffHybrid(
+      'a b\nc d\nz z\ng h',
+      'a b\ni j\nz z\nk f\ng h'
+    )).to.eql([
+      { type: 'same', value: 'a b\n' },
+      { type: 'del', value: 'c ' },
+      { type: 'del', value: 'd\n' },
+      { type: 'ins', value: 'i ' },
+      { type: 'ins', value: 'j\n' },
+      { type: 'same', value: 'z z\n' },
+      { type: 'ins', value: 'k f\n' },
+      { type: 'same', value: 'g h' }
+    ]);
+  });
+
+  it('should support insertions at the start', function () {
+    expect(diffHybrid(
+      'a b\nc d\nz z\ne f\ng h',
+      'y y\na b\ni j\nz z\nk f\ng h'
+    )).to.eql([
+      { type: 'ins', value: 'y y\n' },
+      { type: 'same', value: 'a b\n' },
+      { type: 'del', value: 'c ' },
+      { type: 'del', value: 'd\n' },
+      { type: 'ins', value: 'i ' },
+      { type: 'ins', value: 'j\n' },
+      { type: 'same', value: 'z z\n' },
+      { type: 'del', value: 'e ' },
+      { type: 'ins', value: 'k ' },
+      { type: 'same', value: 'f\n' },
+      { type: 'same', value: 'g h' }
+    ]);
+  });
+
+  it('should support insertions at the end', function () {
+    expect(diffHybrid(
+      'a b\nc d\nz z\ne f\ng h\n',
+      'a b\ni j\nz z\nk f\ng h\ny y'
+    )).to.eql([
+      { type: 'same', value: 'a b\n' },
+      { type: 'del', value: 'c ' },
+      { type: 'del', value: 'd\n' },
+      { type: 'ins', value: 'i ' },
+      { type: 'ins', value: 'j\n' },
+      { type: 'same', value: 'z z\n' },
+      { type: 'del', value: 'e ' },
+      { type: 'ins', value: 'k ' },
+      { type: 'same', value: 'f\n' },
+      { type: 'same', value: 'g h\n' },
+      { type: 'ins', value: 'y ' },
+      { type: 'ins', value: 'y' }
+    ]);
+  });
 });
 
 describe('minimize', function () {

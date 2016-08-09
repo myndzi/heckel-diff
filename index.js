@@ -277,9 +277,7 @@ function refineChanged(changes, fn) {
         ptr = -1;
       }
       return acc.concat(part).concat(cur.eof ? [ ] : [ cur ]);
-    }
-
-    if (cur.type === 'del' && ptr < 0) {
+    } else if (ptr < 0) {
       ptr = idx;
     }
 
